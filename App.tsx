@@ -1,12 +1,14 @@
 
 import React, { useState, useEffect } from 'react';
-import { Search, Sparkles, Loader2, ArrowLeft, LogOut, User, LogIn } from 'lucide-react';
+import { Search, Sparkles, Loader2, ArrowLeft, LogOut, User, LogIn, AlertTriangle, ChevronRight } from 'lucide-react';
 import { Niche } from './types';
-import { getRecentNiches, searchAndAnalyzeNiche } from './services/dataService';
+import { getRecentNiches, searchAndAnalyzeNiche, getUserProfile, UserProfile } from './services/dataService';
 import { supabase } from './services/supabaseClient';
 import NicheCard from './components/NicheCard';
 import PainPointCard from './components/PainPointCard';
 import Auth from './components/Auth';
+import Logo from './components/Logo';
+import Pricing from './components/Pricing';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 const MOCK_TRENDS = [
@@ -18,35 +20,47 @@ const MOCK_TRENDS = [
   { name: 'Jun', value: 95 },
 ];
 
-type View = 'dashboard' | 'auth';
+type View = 'dashboard' | 'auth' | 'pricing';
 
 const App: React.FC = () => {
   const [session, setSession] = useState<any>(null);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
   const [currentView, setCurrentView] = useState<View>('dashboard');
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [niches, setNiches] = useState<Niche[]>([]);
   const [selectedNiche, setSelectedNiche] = useState<Niche | null>(null);
   const [isLoadingApp, setIsLoadingApp] = useState(true);
+  const [showOutofCredits, setShowOutofCredits] = useState(false);
 
   useEffect(() => {
     // Check initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
+      if (session) fetchProfile(session.user.id);
       setIsLoadingApp(false);
     });
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
-      if (session) setCurrentView('dashboard'); // Redirect to dashboard on login
+      if (session) {
+        fetchProfile(session.user.id);
+        if (currentView === 'auth') setCurrentView('dashboard');
+      } else {
+        setProfile(null);
+      }
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [currentView]);
+
+  const fetchProfile = async (userId: string) => {
+    const data = await getUserProfile(userId);
+    setProfile(data);
+  };
 
   useEffect(() => {
-    // Fetch recent niches for public feed
     const fetchInitialData = async () => {
       try {
         const data = await getRecentNiches();
@@ -63,23 +77,33 @@ const App: React.FC = () => {
     if (!searchQuery.trim()) return;
 
     if (!session) {
-      alert("Please sign in to perform a new AI market analysis.");
       setCurrentView('auth');
+      return;
+    }
+
+    if (profile && profile.credits_remaining <= 0) {
+      setShowOutofCredits(true);
       return;
     }
 
     setIsSearching(true);
     try {
-      const result = await searchAndAnalyzeNiche(searchQuery);
+      const { niche, remainingCredits } = await searchAndAnalyzeNiche(searchQuery, session.user.id);
+      
+      // Update local profile credits immediately
+      if (remainingCredits !== null) {
+        setProfile(prev => prev ? { ...prev, credits_remaining: remainingCredits } : null);
+      }
+
       setNiches(prev => {
-        const exists = prev.some(n => n.id === result.id);
-        return exists ? prev : [result, ...prev];
+        const exists = prev.some(n => n.id === niche.id);
+        return exists ? prev : [niche, ...prev];
       });
-      setSelectedNiche(result);
+      setSelectedNiche(niche);
       setSearchQuery('');
     } catch (error) {
       console.error("Search failed:", error);
-      alert("Something went wrong with the analysis. Please ensure your Supabase RLS policies are set correctly.");
+      alert("Something went wrong with the analysis. Please try again.");
     } finally {
       setIsSearching(false);
     }
@@ -88,6 +112,8 @@ const App: React.FC = () => {
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     setSelectedNiche(null);
+    setProfile(null);
+    setCurrentView('dashboard');
   };
 
   if (isLoadingApp) {
@@ -112,20 +138,70 @@ const App: React.FC = () => {
     );
   }
 
+  if (currentView === 'pricing') {
+    return (
+      <div className="relative">
+        <button 
+          onClick={() => setCurrentView('dashboard')}
+          className="absolute top-8 left-8 flex items-center gap-2 text-gray-500 hover:text-black font-medium transition-colors z-50"
+        >
+          <ArrowLeft size={18} /> Back to Dashboard
+        </button>
+        <Pricing onBack={() => setCurrentView('dashboard')} />
+      </div>
+    );
+  }
+
+  const userFirstName = profile?.first_name || session?.user?.email?.split('@')[0] || 'Founder';
+
   return (
-    <div className="min-h-screen pb-20">
+    <div className="min-h-screen pb-20 relative">
+      {/* Out of Credits Modal */}
+      {showOutofCredits && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowOutofCredits(false)}></div>
+          <div className="bg-white rounded-[2.5rem] p-10 max-w-sm w-full relative z-10 shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="w-16 h-16 bg-rose-50 rounded-2xl flex items-center justify-center mb-6">
+              <AlertTriangle size={32} className="text-rose-500" />
+            </div>
+            <h3 className="text-2xl font-bold text-gray-900 mb-3">Out of credits</h3>
+            <p className="text-gray-500 mb-8 leading-relaxed">
+              You've used all 5 trial searches. Upgrade to Pro to continue discovering profitable market niches.
+            </p>
+            <div className="flex flex-col gap-3">
+              <button 
+                onClick={() => {
+                  setShowOutofCredits(false);
+                  setCurrentView('pricing');
+                }}
+                className="w-full bg-black text-white py-4 rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-gray-800 transition-all"
+              >
+                Change Subscription Plan <ChevronRight size={18} />
+              </button>
+              <button 
+                onClick={() => setShowOutofCredits(false)}
+                className="w-full py-4 rounded-2xl font-bold text-gray-400 hover:text-gray-600 transition-all"
+              >
+                Maybe later
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <nav className="max-w-7xl mx-auto px-6 py-8 flex justify-between items-center">
-        <div className="flex items-center gap-2 cursor-pointer" onClick={() => setSelectedNiche(null)}>
-          <div className="w-10 h-10 bg-black rounded-lg flex items-center justify-center text-white font-bold text-xl">N</div>
-          <span className="font-bold text-xl tracking-tight">NicheFinder</span>
+        <div className="cursor-pointer group" onClick={() => setSelectedNiche(null)}>
+          <Logo />
         </div>
         
         <div className="hidden md:flex gap-8 text-sm font-medium text-gray-500">
           <a href="#" className="hover:text-black">Product</a>
-          <a href="#" className="hover:text-black">Discovery</a>
+          <button onClick={() => setCurrentView('pricing')} className="hover:text-black">Pricing</button>
           {session && (
-            <div className="flex items-center gap-1 text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md text-xs font-bold">
-              5 Credits
+            <div className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-bold transition-colors ${
+              (profile?.credits_remaining ?? 0) > 0 ? 'text-emerald-600 bg-emerald-50' : 'text-rose-600 bg-rose-50'
+            }`}>
+              {profile?.credits_remaining ?? 0} Credits Left
             </div>
           )}
         </div>
@@ -133,9 +209,9 @@ const App: React.FC = () => {
         <div className="flex items-center gap-4">
           {session ? (
             <>
-              <div className="hidden sm:flex items-center gap-2 text-sm text-gray-500 bg-white border border-gray-100 px-3 py-1.5 rounded-full">
-                <User size={14} />
-                <span className="max-w-[120px] truncate">{session.user.email}</span>
+              <div className="hidden sm:flex items-center gap-1.5 text-sm text-gray-900 bg-white border border-gray-100 px-4 py-2 rounded-full font-semibold shadow-sm">
+                <span className="text-gray-400 font-medium">Hello</span>
+                <span className="truncate max-w-[100px]">{userFirstName}!</span>
               </div>
               <button 
                 onClick={handleSignOut}
@@ -174,7 +250,8 @@ const App: React.FC = () => {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="e.g. 'Micro-SaaS for real estate agents'..."
-                className="w-full bg-white border border-gray-200 rounded-full py-5 px-8 pl-14 text-lg focus:outline-none focus:ring-4 focus:ring-blue-50 transition-all shadow-sm group-hover:shadow-md"
+                className="w-full bg-white border border-gray-200 rounded-full py-5 px-8 pl-14 text-lg text-gray-900 focus:outline-none focus:ring-4 focus:ring-blue-50 transition-all shadow-sm group-hover:shadow-md disabled:bg-gray-50"
+                disabled={isSearching}
               />
               <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-400" size={24} />
               <button 

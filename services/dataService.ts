@@ -3,6 +3,54 @@ import { supabase } from './supabaseClient';
 import { generateNicheAnalysis } from './geminiService';
 import { Niche } from '../types';
 
+export interface UserProfile {
+  id: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  credits_remaining: number;
+  subscription_tier: string;
+}
+
+export const getUserProfile = async (userId: string): Promise<UserProfile | null> => {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('*')
+    .eq('id', userId)
+    .single();
+  
+  if (error) {
+    console.error("Error fetching profile:", error);
+    return null;
+  }
+  return data as UserProfile;
+};
+
+export const deductCredit = async (userId: string): Promise<number | null> => {
+  // First get current credits
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('credits_remaining')
+    .eq('id', userId)
+    .single();
+
+  if (!profile || profile.credits_remaining <= 0) return null;
+
+  const newCredits = profile.credits_remaining - 1;
+
+  const { error } = await supabase
+    .from('profiles')
+    .update({ credits_remaining: newCredits })
+    .eq('id', userId);
+
+  if (error) {
+    console.error("Error deducting credit:", error);
+    return null;
+  }
+
+  return newCredits;
+};
+
 export const getRecentNiches = async (): Promise<Niche[]> => {
   const { data, error } = await supabase
     .from('niches')
@@ -14,7 +62,7 @@ export const getRecentNiches = async (): Promise<Niche[]> => {
   return (data || []) as Niche[];
 };
 
-export const searchAndAnalyzeNiche = async (query: string): Promise<Niche> => {
+export const searchAndAnalyzeNiche = async (query: string, userId: string): Promise<{ niche: Niche, remainingCredits: number | null }> => {
   // 1. Try to find existing niche (case-insensitive)
   const { data: existing } = await supabase
     .from('niches')
@@ -22,7 +70,10 @@ export const searchAndAnalyzeNiche = async (query: string): Promise<Niche> => {
     .ilike('title', query)
     .single();
 
-  if (existing) return existing as Niche;
+  // If it exists, we still deduct a credit as per user request ("after a user search for a niche the number of credits update")
+  const remainingCredits = await deductCredit(userId);
+
+  if (existing) return { niche: existing as Niche, remainingCredits };
 
   // 2. Generate new analysis if not found
   const analysis = await generateNicheAnalysis(query);
@@ -59,5 +110,5 @@ export const searchAndAnalyzeNiche = async (query: string): Promise<Niche> => {
     .eq('id', newNiche.id)
     .single();
 
-  return completeNiche as Niche;
+  return { niche: completeNiche as Niche, remainingCredits };
 };
