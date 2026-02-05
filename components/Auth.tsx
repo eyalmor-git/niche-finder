@@ -1,10 +1,14 @@
 
 import React, { useState } from 'react';
 import { supabase } from '../services/supabaseClient';
-import { Loader2, Mail, Lock, Sparkles, User } from 'lucide-react';
+import { Loader2, Mail, Lock, Sparkles, User, Info } from 'lucide-react';
 import Logo from './Logo';
 
-const Auth: React.FC = () => {
+interface AuthProps {
+  message?: string;
+}
+
+const Auth: React.FC<AuthProps> = ({ message }) => {
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -45,7 +49,6 @@ const Auth: React.FC = () => {
   };
 
   const handleGoogleLogin = async () => {
-    // Note: This requires Google provider to be configured in Supabase dashboard
     try {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
@@ -62,10 +65,8 @@ const Auth: React.FC = () => {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-[#d9e8ff] via-[#fcfaf7] to-[#ffe8f3] px-4 font-sans">
       <div className="max-w-md w-full">
-        {/* Main Card Container */}
         <div className="bg-white p-10 pt-12 rounded-[3.5rem] shadow-[0_20px_50px_rgba(0,0,0,0.05)] border border-white/50 relative overflow-hidden">
           
-          {/* Logo & Heading */}
           <div className="flex flex-col items-center mb-8">
             <div className="mb-4">
               <Logo size="md" iconOnly />
@@ -73,6 +74,15 @@ const Auth: React.FC = () => {
             <h1 className="text-2xl font-bold text-[#1a1a1a]">
               {isSignUp ? 'Create account' : 'Welcome back!'}
             </h1>
+            
+            {message && (
+              <div className="mt-4 p-3 px-4 bg-indigo-50 border border-indigo-100 rounded-2xl flex items-center gap-3 animate-in slide-in-from-top-2 duration-500">
+                <Sparkles size={16} className="text-indigo-600 shrink-0" />
+                <p className="text-xs font-bold text-indigo-700 leading-tight">
+                  {message}
+                </p>
+              </div>
+            )}
           </div>
 
           <form onSubmit={handleAuth} className="flex flex-col space-y-4">
@@ -148,14 +158,12 @@ const Auth: React.FC = () => {
             )}
           </form>
 
-          {/* Divider */}
           <div className="flex items-center my-8">
             <div className="flex-1 border-t border-gray-200"></div>
             <span className="px-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest">OR</span>
             <div className="flex-1 border-t border-gray-200"></div>
           </div>
 
-          {/* Social Auth */}
           <button
             onClick={handleGoogleLogin}
             className="w-full bg-white border border-gray-100 py-4 rounded-[1.5rem] font-bold text-gray-900 flex items-center justify-center gap-3 hover:bg-gray-50 transition-all shadow-sm active:scale-[0.98]"
@@ -170,7 +178,6 @@ const Auth: React.FC = () => {
           </button>
         </div>
         
-        {/* Toggle Footer */}
         <div className="mt-10 text-center">
           <p className="text-gray-600 font-medium">
             {isSignUp ? 'Already have an account?' : "Don't have an account?"}

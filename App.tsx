@@ -76,6 +76,7 @@ const App: React.FC = () => {
     e?.preventDefault();
     if (!searchQuery.trim()) return;
 
+    // Handle guest search intent: redirect to auth but keep the query
     if (!session) {
       setCurrentView('auth');
       return;
@@ -90,7 +91,6 @@ const App: React.FC = () => {
     try {
       const { niche, remainingCredits } = await searchAndAnalyzeNiche(searchQuery, session.user.id);
       
-      // Update local profile credits immediately
       if (remainingCredits !== null) {
         setProfile(prev => prev ? { ...prev, credits_remaining: remainingCredits } : null);
       }
@@ -133,7 +133,7 @@ const App: React.FC = () => {
         >
           <ArrowLeft size={18} /> Back to Home
         </button>
-        <Auth />
+        <Auth message={searchQuery ? `Sign in to analyze "${searchQuery}"` : undefined} />
       </div>
     );
   }
@@ -156,7 +156,6 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen pb-20 relative">
-      {/* Out of Credits Modal */}
       {showOutofCredits && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowOutofCredits(false)}></div>
