@@ -23,3 +23,40 @@ export interface Niche {
   last_updated_at: string;
   market_signals?: MarketSignal[];
 }
+
+// --- Research data types ---
+
+export interface SerperSearchResult {
+  title: string;
+  link: string;
+  snippet: string;
+  position: number;
+}
+
+export interface SerperResponse {
+  organic: SerperSearchResult[];
+  searchParameters?: { q: string };
+}
+
+export interface YouTubeVideo {
+  title: string;
+  channelTitle: string;
+  description: string;
+  videoId: string;
+  publishedAt: string;
+  viewCount?: string;
+}
+
+export interface ResearchData {
+  query: string;
+  google: SerperSearchResult[];
+  reddit: SerperSearchResult[];
+  youtube: YouTubeVideo[];
+}
+
+export type ResearchPhase =
+  | 'fetching'
+  | 'analyzing'
+  | 'scoring'
+  | 'saving'
+  | 'done';

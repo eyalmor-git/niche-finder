@@ -1,18 +1,57 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
-import { Niche, MarketSignal } from "../types";
+import type { Niche, MarketSignal, ResearchData } from "../types";
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || "" });
 
-export const generateNicheAnalysis = async (query: string): Promise<Partial<Niche> & { signals: Partial<MarketSignal>[] }> => {
-  const model = 'gemini-3-flash-preview';
-  
+export const generateNicheAnalysis = async (
+  researchData: ResearchData
+): Promise<Partial<Niche> & { signals: Partial<MarketSignal>[] }> => {
+  const model = 'gemini-2.0-flash';
+
+  // Build a data-rich prompt from real research results
+  const googleSummary = researchData.google
+    .slice(0, 5)
+    .map((r, i) => `  ${i + 1}. "${r.title}" — ${r.snippet} (${r.link})`)
+    .join('\n');
+
+  const redditSummary = researchData.reddit
+    .slice(0, 5)
+    .map((r, i) => `  ${i + 1}. "${r.title}" — ${r.snippet} (${r.link})`)
+    .join('\n');
+
+  const youtubeSummary = researchData.youtube
+    .slice(0, 5)
+    .map((v, i) => `  ${i + 1}. "${v.title}" by ${v.channelTitle} — ${v.description} (https://youtube.com/watch?v=${v.videoId})`)
+    .join('\n');
+
+  const prompt = `You are a market research analyst. Analyze the following REAL data collected from Google, Reddit, and YouTube about the niche query: "${researchData.query}".
+
+=== GOOGLE SEARCH RESULTS ===
+${googleSummary || '  No results found.'}
+
+=== REDDIT DISCUSSIONS ===
+${redditSummary || '  No results found.'}
+
+=== YOUTUBE VIDEOS ===
+${youtubeSummary || '  No results found.'}
+
+Based on this real data, provide:
+1. A concise title for this niche opportunity.
+2. A market category.
+3. A growth_score (0-100): How much momentum and growing interest does this niche show?
+4. A pain_score (0-100): How intense are the pain points people express? Are they actively seeking solutions?
+5. A competition_score (0-100): How saturated is this market? How many established players exist?
+6. An ai_summary: A 2-3 paragraph market thesis grounded in the data above. Reference specific signals you observed.
+7. Exactly 3 market signals — pick the most compelling real evidence from the data:
+   - One from reddit (use an actual Reddit link from the data above)
+   - One from youtube (use an actual YouTube link from the data above)
+   - One from google_trends (use the most relevant Google result link)
+   Each signal should have a content_snippet that quotes or summarizes the real finding.`;
+
   const response = await ai.models.generateContent({
     model,
-    contents: `Deeply analyze the market niche: "${query}". 
-    Identify specific consumer pain points, growth trends, and current competition level.
-    Provide a score (0-100) for growth_score, pain_score, and competition_score.
-    Generate 3 real-world style market signals (one for reddit, one for youtube, one for google_trends).`,
+    contents: prompt,
     config: {
       responseMimeType: "application/json",
       responseSchema: {

@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
-import { Search, Sparkles, Loader2, ArrowLeft, LogOut, User, LogIn, AlertTriangle, ChevronRight } from 'lucide-react';
-import { Niche } from './types';
+import { Search, Sparkles, Loader2, ArrowLeft, LogOut, User, LogIn, AlertTriangle, ChevronRight, Globe, MessageSquare, Youtube, Brain, Save, CheckCircle } from 'lucide-react';
+import { Niche, ResearchPhase } from './types';
 import { getRecentNiches, searchAndAnalyzeNiche, getUserProfile, UserProfile } from './services/dataService';
 import { supabase } from './services/supabaseClient';
 import NicheCard from './components/NicheCard';
@@ -22,6 +22,15 @@ const MOCK_TRENDS = [
 
 type View = 'dashboard' | 'auth' | 'pricing';
 
+const CookingStep: React.FC<{ icon: React.ReactNode; label: string; active: boolean; done: boolean }> = ({ icon, label, active, done }) => (
+  <div className={`flex items-center gap-3 py-2 px-3 rounded-xl transition-all duration-300 ${active ? 'bg-blue-50' : done ? 'bg-emerald-50/50' : 'opacity-40'}`}>
+    <div className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${done ? 'bg-emerald-100 text-emerald-600' : active ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-400'}`}>
+      {done ? <CheckCircle size={16} /> : active ? <Loader2 size={16} className="animate-spin" /> : icon}
+    </div>
+    <span className={`text-sm font-medium ${done ? 'text-emerald-700' : active ? 'text-blue-700' : 'text-gray-400'}`}>{label}</span>
+  </div>
+);
+
 const App: React.FC = () => {
   const [session, setSession] = useState<any>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -32,6 +41,7 @@ const App: React.FC = () => {
   const [selectedNiche, setSelectedNiche] = useState<Niche | null>(null);
   const [isLoadingApp, setIsLoadingApp] = useState(true);
   const [showOutofCredits, setShowOutofCredits] = useState(false);
+  const [researchPhase, setResearchPhase] = useState<ResearchPhase | null>(null);
 
   useEffect(() => {
     // Check initial session
@@ -88,9 +98,14 @@ const App: React.FC = () => {
     }
 
     setIsSearching(true);
+    setResearchPhase('fetching');
     try {
-      const { niche, remainingCredits } = await searchAndAnalyzeNiche(searchQuery, session.user.id);
-      
+      const { niche, remainingCredits } = await searchAndAnalyzeNiche(
+        searchQuery,
+        session.user.id,
+        (phase) => setResearchPhase(phase)
+      );
+
       if (remainingCredits !== null) {
         setProfile(prev => prev ? { ...prev, credits_remaining: remainingCredits } : null);
       }
@@ -106,6 +121,7 @@ const App: React.FC = () => {
       alert("Something went wrong with the analysis. Please try again.");
     } finally {
       setIsSearching(false);
+      setResearchPhase(null);
     }
   };
 
@@ -253,15 +269,55 @@ const App: React.FC = () => {
                 disabled={isSearching}
               />
               <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-400" size={24} />
-              <button 
+              <button
                 type="submit"
                 disabled={isSearching}
                 className="absolute right-3 top-1/2 -translate-y-1/2 bg-blue-600 text-white px-6 py-3 rounded-full font-semibold hover:bg-blue-700 transition-colors disabled:bg-gray-400 flex items-center gap-2"
               >
                 {isSearching ? <Loader2 className="animate-spin" size={20} /> : <Sparkles size={18} />}
-                {isSearching ? 'Analyzing...' : 'Find Niche'}
+                {isSearching ? 'Cooking...' : 'Find Niche'}
               </button>
             </form>
+
+            {isSearching && researchPhase && (
+              <div className="max-w-md mx-auto mt-10 bg-white border border-gray-100 rounded-3xl p-8 shadow-lg animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
+                    <Sparkles className="text-blue-600 animate-pulse" size={20} />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-gray-900">Cooking your niche...</h3>
+                    <p className="text-xs text-gray-400">Gathering real market intelligence</p>
+                  </div>
+                </div>
+                <div className="space-y-4">
+                  <CookingStep
+                    icon={<Globe size={16} />}
+                    label="Searching Google & Reddit"
+                    active={researchPhase === 'fetching'}
+                    done={['analyzing', 'scoring', 'saving', 'done'].includes(researchPhase)}
+                  />
+                  <CookingStep
+                    icon={<Youtube size={16} />}
+                    label="Scanning YouTube signals"
+                    active={researchPhase === 'fetching'}
+                    done={['analyzing', 'scoring', 'saving', 'done'].includes(researchPhase)}
+                  />
+                  <CookingStep
+                    icon={<Brain size={16} />}
+                    label="AI analyzing market data"
+                    active={researchPhase === 'analyzing'}
+                    done={['scoring', 'saving', 'done'].includes(researchPhase)}
+                  />
+                  <CookingStep
+                    icon={<Save size={16} />}
+                    label="Saving niche report"
+                    active={researchPhase === 'saving'}
+                    done={researchPhase === 'done'}
+                  />
+                </div>
+              </div>
+            )}
 
             <div className="mt-24">
               <div className="flex items-center justify-between mb-8">
